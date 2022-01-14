@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  
+  <groupId>com.rezzedup.util</groupId>
+  <artifactId>versions-parent</artifactId>
+  <version>${revision}</version>
+  <packaging>pom</packaging>
+  
+  <name>Versions (Parent)</name>
+  <inceptionYear>2022</inceptionYear>
+  <description>Semantic versions.</description>
+  <url>https://github.com/RezzedUp/Versions</url>
+  
+  <licenses>
+    <license>
+      <name>Mozilla Public License Version 2.0</name>
+      <url>http://mozilla.org/MPL/2.0</url>
+    </license>
+  </licenses>
+  
+  <developers>
+    <developer>
+      <name>RezzedUp</name>
+      <url>https://github.com/RezzedUp</url>
+    </developer>
+  </developers>
+  
+  <scm>
+    <connection>scm:git:git://github.com/RezzedUp/Versions.git</connection>
+    <developerConnection>scm:git:ssh://github.com:RezzedUp/Versions.git</developerConnection>
+    <url>https://github.com/RezzedUp/Versions</url>
+  </scm>
+  
+  <issueManagement>
+    <system>GitHub Issues</system>
+    <url>https://github.com/RezzedUp/Versions/issues</url>
+  </issueManagement>
+  
+  <properties>
+    <revision>0.0.1-SNAPSHOT</revision>
+    
+    <maven.compiler.release>11</maven.compiler.release>
+    <maven.build.timestamp.format>yyyy</maven.build.timestamp.format>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    
+    <!-- Don't deploy parent pom -->
+    <skipNexusStagingDeployMojo>true</skipNexusStagingDeployMojo>
+    
+    <!-- License headers -->
+    <license.header.year>${project.inceptionYear}<!---${maven.build.timestamp}--></license.header.year>
+    <license.header.owner>RezzedUp</license.header.owner>
+    <license.header.url>https://github.com/RezzedUp/Versions</license.header.url>
+  </properties>
+  
+  <modules>
+    <module>versions</module>
+  </modules>
+  
+  <dependencies>
+    <!-- Nullness Annotations: @NullOr (via maven-central) -->
+    <dependency>
+      <groupId>pl.tlinkowski.annotation</groupId>
+      <artifactId>pl.tlinkowski.annotation.basic</artifactId>
+      <version>0.2.0</version>
+      <!-- Note: scope must be visible to dependent projects otherwise nullness annotations will not work as intended -->
+    </dependency>
+    <!-- JUnit 5 (via maven-central) -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <version>5.8.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+  
+  <build>
+    <defaultGoal>package</defaultGoal>
+    <plugins>
+      <!-- Compile project -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.8.1</version>
+        <configuration>
+          <release>${maven.compiler.release}</release>
+          <compilerArgs>
+            <arg>-parameters</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+      <!-- Run tests -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.0.0-M5</version>
+      </plugin>
+      <!--
+      Flatten POM versioning so built JARs don't ship
+      with ${revision} properties as their version number.
+      -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>flatten-maven-plugin</artifactId>
+        <version>1.2.2</version>
+        <configuration>
+          <updatePomFile>true</updatePomFile>
+          <flattenMode>ossrh</flattenMode>
+        </configuration>
+        <executions>
+          <execution>
+            <id>flatten</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>flatten</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>flatten-clean</id>
+            <phase>clean</phase>
+            <goals>
+              <goal>clean</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Add license headers -->
+      <plugin>
+        <groupId>com.mycila</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <version>4.1</version>
+        <configuration>
+          <properties>
+            <year>${license.header.year}</year>
+            <owner>${license.header.owner}</owner>
+            <email>${license.header.url}</email>
+          </properties>
+          <licenseSets>
+            <licenseSet>
+              <header>com/mycila/maven/plugin/license/templates/MPL-2.txt</header>
+              <excludes>
+                <exclude>*.md</exclude>
+                <exclude>*.txt</exclude>
+                <exclude>*.xml</exclude>
+                <exclude>*.yml</exclude>
+                <exclude>.run/**</exclude>
+                <exclude>src/test/resources/**</exclude>
+                <exclude>src/main/resources/**</exclude>
+              </excludes>
+            </licenseSet>
+          </licenseSets>
+        </configuration>
+        <!-- Check for missing license headers -->
+        <executions>
+          <execution>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Enforce Maven Central standards -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.0.0-M3</version>
+        <executions>
+          <execution>
+            <id>enforce-no-repositories</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireNoRepositories>
+                  <message>Only use dependencies from Maven Central.</message>
+                </requireNoRepositories>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+  
+  <distributionManagement>
+    <snapshotRepository>
+      <id>ossrh</id>
+      <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+    </snapshotRepository>
+  </distributionManagement>
+  
+  <profiles>
+    <!-- Development (activated by default, unless: -Ddeploy) -->
+    <profile>
+      <id>development</id>
+      <activation>
+        <property>
+          <name>!deploy</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <!-- Enforce SNAPSHOT versions in development -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>enforce-no-releases</id>
+                <goals>
+                  <goal>enforce</goal>
+                </goals>
+                <configuration>
+                  <rules>
+                    <requireProperty>
+                      <property>revision</property>
+                      <message>Missing SNAPSHOT in version.</message>
+                      <regex>.+-SNAPSHOT$</regex>
+                    </requireProperty>
+                  </rules>
+                  <fail>true</fail>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <!-- Production (activated by: -Pproduction OR -Ddeploy) -->
+    <profile>
+      <id>production</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+        <property>
+          <name>deploy</name>
+        </property>
+      </activation>
+      <build>
+        <defaultGoal>clean install</defaultGoal>
+        <plugins>
+          <!-- Generate javadocs -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.2.0</version>
+            <configuration>
+              <doclint>none</doclint> <!-- Calm warnings due to not having *everything* documented -->
+              <links>
+                <link>https://javadoc.io/doc/pl.tlinkowski.annotation/pl.tlinkowski.annotation.basic/0.2.0/</link>
+              </links>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <!-- Attach sources -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.2.0</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <!-- Deploy (activated by: -Ddeploy) -->
+    <profile>
+      <id>deploy</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+        <property>
+          <name>deploy</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <!-- Sign artifacts -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>1.6</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <!-- Prevent `gpg` from using pinentry programs -->
+              <gpgArguments>
+                <arg>--pinentry-mode</arg>
+                <arg>loopback</arg>
+              </gpgArguments>
+            </configuration>
+          </plugin>
+          <!-- Nexus Staging Plugin -->
+          <plugin>
+            <groupId>org.sonatype.plugins</groupId>
+            <artifactId>nexus-staging-maven-plugin</artifactId>
+            <version>1.6.8</version>
+            <extensions>true</extensions>
+            <configuration>
+              <serverId>ossrh</serverId>
+              <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
+              <autoReleaseAfterClose>false</autoReleaseAfterClose>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
+</project>

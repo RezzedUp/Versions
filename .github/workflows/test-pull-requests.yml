@@ -1,0 +1,22 @@
+name: Test Pull Requests
+
+on: [pull_request]
+
+jobs:
+  test-pull-requests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-java@v2
+      with:
+        distribution: 'adopt'
+        java-version: '11'
+    - name: Cache Local Maven Repository
+      uses: actions/cache@v2
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+    - name: Build Then Run Tests and Verify
+      run: mvn -B --update-snapshots verify

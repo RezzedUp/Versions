@@ -1,0 +1,8 @@
+*.class
+*.jar
+*.iml
+
+.idea/
+target/
+
+.flattened-pom.xml
