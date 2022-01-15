@@ -24,9 +24,15 @@ public final class Version implements Comparable<Version>
         throw new IllegalArgumentException(name + " must be positive: " + number);
     }
     
+    private static boolean isNullOrEmpty(@NullOr String string)
+    {
+        return string == null || string.isEmpty();
+    }
+    
     private static @NullOr String onlyIfMatchesPattern(@NullOr String input, Pattern pattern, String name)
     {
-        if (input == null) { return null; }
+        // Empty may as well be null, as far as Version is concerned.
+        if (isNullOrEmpty(input)) { return null; }
         if (pattern.matcher(input).matches()) { return input; }
         
         throw new IllegalArgumentException(
@@ -36,7 +42,10 @@ public final class Version implements Comparable<Version>
     
     public static Version of(int major, int minor, int patch, @NullOr String prerelease, @NullOr String build)
     {
-        if (major == 0 && minor == 0 && patch == 0 && prerelease == null && build == null) { return ZERO; }
+        if (major == 0 && minor == 0 && patch == 0 && isNullOrEmpty(prerelease) && isNullOrEmpty(build))
+        {
+            return ZERO;
+        }
         
         return new Version(
             onlyIfPositive(major, "major"),
