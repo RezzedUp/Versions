@@ -8,12 +8,14 @@
 package com.rezzedup.util.versions;
 
 import pl.tlinkowski.annotation.basic.NullOr;
+import pl.tlinkowski.annotation.basic.VisibleForTesting;
 
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@SuppressWarnings("unused")
 public final class Version implements Comparable<Version>
 {
     private static final Pattern VALID_PRE_RELEASE_PATTERN =
@@ -206,7 +208,8 @@ public final class Version implements Comparable<Version>
     // 11.4:    Precedence for two pre-release versions with the same major, minor, and patch version
     //          MUST be determined by comparing each dot separated identifier from left to right until
     //          a difference is found as follows:
-    private static int comparePrereleaseStrings(String leftPrerelease, String rightPrerelease)
+    @VisibleForTesting
+    static int comparePrereleaseStrings(String leftPrerelease, String rightPrerelease)
     {
         if (leftPrerelease.equals(rightPrerelease)) { return 0; }
         
