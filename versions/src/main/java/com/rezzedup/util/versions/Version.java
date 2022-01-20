@@ -16,6 +16,31 @@ import java.util.regex.Pattern;
 
 public final class Version implements Comparable<Version>
 {
+    private static final Pattern VALID_PRE_RELEASE_PATTERN =
+        Pattern.compile("(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*");
+    
+    private static final Pattern VALID_BUILD_METADATA_PATTERN =
+        Pattern.compile("[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*");
+    
+    private static final Pattern VALID_SEMVER_PATTERN =
+        Pattern.compile(
+            "(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)" +
+            "(?:-(?<prerelease>" + VALID_PRE_RELEASE_PATTERN + "))?" +
+            "(?:\\+(?<buildmetadata>" + VALID_BUILD_METADATA_PATTERN + "))?"
+        );
+    
+    private static final Pattern PARTIAL_SEMVER_PATTERN =
+        Pattern.compile(
+            "(?<major>0|[1-9]\\d*)(?:\\.(?<minor>0|[1-9]\\d*))?(?:\\.(?<patch>0|[1-9]\\d*))?" +
+            "(?:-(?<prerelease>" + VALID_PRE_RELEASE_PATTERN + "))?" +
+            "(?:\\+(?<buildmetadata>" + VALID_BUILD_METADATA_PATTERN + "))?"
+        );
+    
+    private static final Pattern DOT_SEPARATOR = Pattern.compile("\\.");
+    
+    private static final Pattern DIGITS = Pattern.compile("\\d+");
+    
+    /** Zero-version constant **/
     private static final Version ZERO = new Version(0, 0, 0, null, null);
     
     private static int onlyIfPositive(int number, String name)
@@ -40,6 +65,11 @@ public final class Version implements Comparable<Version>
         );
     }
     
+    private static int intOrZero(@NullOr String text)
+    {
+        return (text == null) ? 0 : Integer.parseInt(text);
+    }
+    
     public static Version of(int major, int minor, int patch, @NullOr String prerelease, @NullOr String build)
     {
         if (major == 0 && minor == 0 && patch == 0 && isNullOrEmpty(prerelease) && isNullOrEmpty(build))
@@ -51,8 +81,8 @@ public final class Version implements Comparable<Version>
             onlyIfPositive(major, "major"),
             onlyIfPositive(minor, "minor"),
             onlyIfPositive(patch, "patch"),
-            onlyIfMatchesPattern(prerelease, SemanticVersions.VALID_PRE_RELEASE_PATTERN, "prerelease"),
-            onlyIfMatchesPattern(build, SemanticVersions.VALID_BUILD_METADATA_PATTERN, "build")
+            onlyIfMatchesPattern(prerelease, VALID_PRE_RELEASE_PATTERN, "prerelease"),
+            onlyIfMatchesPattern(build, VALID_BUILD_METADATA_PATTERN, "build")
         );
     }
     
@@ -74,11 +104,6 @@ public final class Version implements Comparable<Version>
     public static Version of(int major)
     {
         return Version.of(major, 0, 0, null, null);
-    }
-    
-    private static int intOrZero(@NullOr String text)
-    {
-        return (text == null) ? 0 : Integer.parseInt(text);
     }
     
     private static Version parseOrThrow(Pattern pattern, String input)
@@ -104,12 +129,12 @@ public final class Version implements Comparable<Version>
     
     public static Version parseOrThrow(String input)
     {
-        return parseOrThrow(SemanticVersions.PARTIAL_SEMVER_PATTERN, input);
+        return parseOrThrow(PARTIAL_SEMVER_PATTERN, input);
     }
     
     public static Version parseStrictOrThrow(String input)
     {
-        return parseOrThrow(SemanticVersions.VALID_SEMVER_PATTERN, input);
+        return parseOrThrow(VALID_SEMVER_PATTERN, input);
     }
     
     public static Optional<Version> parse(String input)
@@ -172,9 +197,57 @@ public final class Version implements Comparable<Version>
         else
         {
             if (o.prerelease == null) { return -1; }
-            return SemanticVersions.comparePrereleaseStrings(prerelease, o.prerelease);
+            return comparePrereleaseStrings(prerelease, o.prerelease);
         }
         
+        return 0;
+    }
+    
+    // 11.4:    Precedence for two pre-release versions with the same major, minor, and patch version
+    //          MUST be determined by comparing each dot separated identifier from left to right until
+    //          a difference is found as follows:
+    private static int comparePrereleaseStrings(String leftPrerelease, String rightPrerelease)
+    {
+        if (leftPrerelease.equals(rightPrerelease)) { return 0; }
+        
+        String[] leftIdentifiers = DOT_SEPARATOR.split(leftPrerelease);
+        String[] rightIdentifiers = DOT_SEPARATOR.split(rightPrerelease);
+        
+        for (int i = 0; i < leftIdentifiers.length; i++)
+        {
+            String left = leftIdentifiers[i];
+            
+            // 11.4.4:  A larger set of pre-release fields has a higher precedence than a smaller set,
+            //          if all of the preceding identifiers are equal.
+            // (Right has fewer identifiers, so left takes precedence)
+            if (rightIdentifiers.length <= i) { return 1; }
+            
+            String right = rightIdentifiers[i];
+            
+            boolean leftIsNumeric = DIGITS.matcher(left).matches();
+            boolean rightIsNumeric = DIGITS.matcher(right).matches();
+            
+            // 11.4.1: Identifiers consisting of only digits are compared numerically.
+            if (leftIsNumeric && rightIsNumeric)
+            {
+                int diff = Integer.parseInt(left) - Integer.parseInt(right);
+                
+                if (diff == 0) { continue; }
+                else { return diff; }
+            }
+            // 11.4.3: Numeric identifiers always have lower precedence than non-numeric identifiers.
+            else if (leftIsNumeric) { return -1; }
+            else if (rightIsNumeric) { return 1; }
+            
+            // 11.4.2: Identifiers with letters or hyphens are compared lexically in ASCII sort order.
+            int diff = left.compareTo(right);
+            if (diff != 0) { return diff; }
+        }
+        
+        // Right has more segments, which takes precedence over left
+        if (rightIdentifiers.length > leftIdentifiers.length) { return -1; }
+        
+        // Equal
         return 0;
     }
     
@@ -256,13 +329,13 @@ public final class Version implements Comparable<Version>
         
         public Builder prerelease(@NullOr String prerelease)
         {
-            this.prerelease = onlyIfMatchesPattern(prerelease, SemanticVersions.VALID_PRE_RELEASE_PATTERN, "prerelease");
+            this.prerelease = onlyIfMatchesPattern(prerelease, VALID_PRE_RELEASE_PATTERN, "prerelease");
             return this;
         }
         
         public Builder build(@NullOr String build)
         {
-            this.build = onlyIfMatchesPattern(build, SemanticVersions.VALID_BUILD_METADATA_PATTERN, "build");
+            this.build = onlyIfMatchesPattern(build, VALID_BUILD_METADATA_PATTERN, "build");
             return this;
         }
         
