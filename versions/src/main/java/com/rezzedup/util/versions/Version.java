@@ -180,17 +180,106 @@ public final class Version implements Comparable<Version>
     
     public Optional<String> build() { return Optional.ofNullable(build); }
     
+    public boolean greaterThan(Version o)
+    {
+        return compareTo(o) > 0;
+    }
+    
+    public boolean greaterThanOrEqualTo(Version o)
+    {
+        return compareTo(o) >= 0;
+    }
+    
+    // Like equals, but disregards build metadata
+    public boolean equalTo(Version version)
+    {
+        return compareTo(version) == 0;
+    }
+    
+    public boolean lessThan(Version o)
+    {
+        return compareTo(o) < 0;
+    }
+    
+    public boolean lessThanOrEqualTo(Version o)
+    {
+        return compareTo(o) <= 0;
+    }
+    
+    // >= 1.2.3
+    public boolean atLeast(int major, int minor, int patch)
+    {
+        return compareTo(major, minor, patch) >= 0;
+    }
+    
+    // >= 1.2.*
+    public boolean atLeast(int major, int minor)
+    {
+        return atLeast(major, minor, 0);
+    }
+    
+    // >= 1.*.*
+    public boolean atLeast(int major)
+    {
+        return atLeast(major, 0, 0);
+    }
+    
+    // <= 1.2.3
+    public boolean atMost(int major, int minor, int patch)
+    {
+        return compareTo(major, minor, patch) <= 0;
+    }
+    
+    // <= 1.2.*
+    public boolean atMost(int major, int minor)
+    {
+        return atMost(major, minor, Integer.MAX_VALUE);
+    }
+    
+    // <= 1.*.*
+    public boolean atMost(int major)
+    {
+        return atMost(major, Integer.MAX_VALUE, Integer.MAX_VALUE);
+    }
+    
+    // == 1.2.3
+    public boolean isAny(int major, int minor, int patch)
+    {
+        return atLeast(major, minor, patch) && atMost(major, minor, patch);
+    }
+    
+    // == 1.2.*
+    public boolean isAny(int major, int minor)
+    {
+        return atLeast(major, minor) && atMost(major, minor);
+    }
+    
+    // == 1.*.*
+    public boolean isAny(int major)
+    {
+        return atLeast(major) && atMost(major);
+    }
+    
+    @SuppressWarnings("RedundantIfStatement") // included for clarity
+    private int compareTo(int major, int minor, int patch)
+    {
+        int diffMajor = this.major - major;
+        if (diffMajor != 0) { return diffMajor; }
+        
+        int diffMinor = this.minor - minor;
+        if (diffMinor != 0) { return diffMinor; }
+        
+        int diffPatch = this.patch - patch;
+        if (diffPatch != 0) { return diffPatch; }
+        
+        return 0;
+    }
+    
     @Override
     public int compareTo(Version o)
     {
-        int diffMajor = major - o.major;
-        if (diffMajor != 0) { return diffMajor; }
-        
-        int diffMinor = minor - o.minor;
-        if (diffMinor != 0) { return diffMinor; }
-        
-        int diffPatch = patch - o.patch;
-        if (diffPatch != 0) { return diffPatch; }
+        int diff = compareTo(o.major, o.minor, o.patch);
+        if (diff != 0) { return diff; }
         
         if (prerelease == null)
         {
@@ -252,12 +341,6 @@ public final class Version implements Comparable<Version>
         
         // Equal
         return 0;
-    }
-    
-    // Like equals, but disregards build metadata
-    public boolean equivalentTo(Version version)
-    {
-        return compareTo(version) == 0;
     }
     
     public Builder toBuilder()

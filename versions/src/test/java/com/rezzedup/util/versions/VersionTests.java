@@ -7,10 +7,11 @@
  */
 package com.rezzedup.util.versions;
 
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.Comparator;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class VersionTests
 {
@@ -19,8 +20,7 @@ public class VersionTests
     {
         Version ver = Version.of(1, 0, 0);
         
-        Assertions.assertThat((VersionSource) () -> ver)
-            .isInstanceOf(VersionSource.class)
+        assertThat((VersionSource) () -> ver)
             .matches(source -> source.version() == ver)
             .matches(source -> Comparator.comparing(VersionSource::version).compare(source, Version::zero) > 0);
     }
