@@ -8,104 +8,73 @@
 package com.rezzedup.util.versions;
 
 import pl.tlinkowski.annotation.basic.NullOr;
-import pl.tlinkowski.annotation.basic.VisibleForTesting;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @SuppressWarnings("unused")
-public final class Version implements Comparable<Version>
+public final class Version implements Versions.Comparable<Version>
 {
-    private static final Pattern VALID_PRE_RELEASE_PATTERN =
-        Pattern.compile("(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*");
-    
-    private static final Pattern VALID_BUILD_METADATA_PATTERN =
-        Pattern.compile("[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*");
-    
-    private static final Pattern VALID_SEMVER_PATTERN =
-        Pattern.compile(
-            "(?<major>0|[1-9]\\d*)\\.(?<minor>0|[1-9]\\d*)\\.(?<patch>0|[1-9]\\d*)" +
-            "(?:-(?<prerelease>" + VALID_PRE_RELEASE_PATTERN + "))?" +
-            "(?:\\+(?<buildmetadata>" + VALID_BUILD_METADATA_PATTERN + "))?"
-        );
-    
-    private static final Pattern PARTIAL_SEMVER_PATTERN =
-        Pattern.compile(
-            "(?<major>0|[1-9]\\d*)(?:\\.(?<minor>0|[1-9]\\d*))?(?:\\.(?<patch>0|[1-9]\\d*))?" +
-            "(?:-(?<prerelease>" + VALID_PRE_RELEASE_PATTERN + "))?" +
-            "(?:\\+(?<buildmetadata>" + VALID_BUILD_METADATA_PATTERN + "))?"
-        );
-    
-    private static final Pattern DOT_SEPARATOR = Pattern.compile("\\.");
-    
-    private static final Pattern DIGITS = Pattern.compile("\\d+");
-    
     /** Zero-version constant **/
-    private static final Version ZERO = new Version(0, 0, 0, null, null);
+    static final Version ZERO = new Version(VersionCore.ZERO, VersionMetadata.EMPTY, VersionMetadata.EMPTY);
     
-    private static int onlyIfPositive(int number, String name)
+    public static VersionCore core(int major, int minor, int patch)
     {
-        if (number >= 0) { return number; }
-        throw new IllegalArgumentException(name + " must be positive: " + number);
+        return VersionCore.of(major, minor, patch);
     }
     
-    private static boolean isNullOrEmpty(@NullOr String string)
+    public static VersionMetadata meta(Collection<String> identifiers)
     {
-        return string == null || string.isEmpty();
+        return VersionMetadata.of(identifiers);
     }
     
-    private static @NullOr String onlyIfMatchesPattern(@NullOr String input, Pattern pattern, String name)
+    public static VersionMetadata meta(String meta)
     {
-        // Empty may as well be null, as far as Version is concerned.
-        if (isNullOrEmpty(input)) { return null; }
-        if (pattern.matcher(input).matches()) { return input; }
-        
-        throw new IllegalArgumentException(
-            name + " must match pattern: `" + pattern + "` but received invalid input: \"" + input + "\""
-        );
+        if (meta.isEmpty()) { return VersionMetadata.EMPTY; }
+        return meta(List.of(Versions.DOT_SEPARATOR.split(meta)));
     }
     
-    private static int intOrZero(@NullOr String text)
+    public static Version of(VersionCore core, VersionMetadata prerelease, VersionMetadata build)
     {
-        return (text == null) ? 0 : Integer.parseInt(text);
-    }
-    
-    public static Version of(int major, int minor, int patch, @NullOr String prerelease, @NullOr String build)
-    {
-        if (major == 0 && minor == 0 && patch == 0 && isNullOrEmpty(prerelease) && isNullOrEmpty(build))
+        if (core == VersionCore.ZERO && prerelease == VersionMetadata.EMPTY && build == VersionMetadata.EMPTY)
         {
             return ZERO;
         }
         
-        return new Version(
-            onlyIfPositive(major, "major"),
-            onlyIfPositive(minor, "minor"),
-            onlyIfPositive(patch, "patch"),
-            onlyIfMatchesPattern(prerelease, VALID_PRE_RELEASE_PATTERN, "prerelease"),
-            onlyIfMatchesPattern(build, VALID_BUILD_METADATA_PATTERN, "build")
-        );
+        Objects.requireNonNull(core, "core");
+        Objects.requireNonNull(prerelease, "prerelease");
+        Objects.requireNonNull(build, "build");
+        
+        return new Version(core, prerelease, build);
     }
     
-    public static Version of(int major, int minor, int patch, @NullOr String prerelease)
+    public static Version of(int major, int minor, int patch, String prerelease, String build)
     {
-        return Version.of(major, minor, patch, prerelease, null);
+        return Version.of(core(major, minor, patch), meta(prerelease), meta(build));
+    }
+    
+    public static Version of(int major, int minor, int patch, String prerelease)
+    {
+        return Version.of(major, minor, patch, prerelease, "");
     }
     
     public static Version of(int major, int minor, int patch)
     {
-        return Version.of(major, minor, patch, null, null);
+        return Version.of(major, minor, patch, "", "");
     }
     
     public static Version of(int major, int minor)
     {
-        return Version.of(major, minor, 0, null, null);
+        return Version.of(major, minor, 0, "", "");
     }
     
     public static Version of(int major)
     {
-        return Version.of(major, 0, 0, null, null);
+        return Version.of(major, 0, 0, "", "");
     }
     
     private static Version parseOrThrow(Pattern pattern, String input)
@@ -120,23 +89,23 @@ public final class Version implements Comparable<Version>
             );
         }
         
-        int major = intOrZero(matcher.group("major"));
-        int minor = intOrZero(matcher.group("minor"));
-        int patch = intOrZero(matcher.group("patch"));
-        @NullOr String prerelease = matcher.group("prerelease");
-        @NullOr String build = matcher.group("buildmetadata");
+        int major = Versions.intOrZero(matcher.group("major"));
+        int minor = Versions.intOrZero(matcher.group("minor"));
+        int patch = Versions.intOrZero(matcher.group("patch"));
+        String prerelease = Versions.emptyIfNull(matcher.group("prerelease"));
+        String build = Versions.emptyIfNull(matcher.group("buildmetadata"));
         
         return Version.of(major, minor, patch, prerelease, build);
     }
     
     public static Version parseOrThrow(String input)
     {
-        return parseOrThrow(PARTIAL_SEMVER_PATTERN, input);
+        return parseOrThrow(Versions.PARTIAL_SEMVER_PATTERN, input);
     }
     
     public static Version parseStrictOrThrow(String input)
     {
-        return parseOrThrow(VALID_SEMVER_PATTERN, input);
+        return parseOrThrow(Versions.VALID_SEMVER_PATTERN, input);
     }
     
     public static Optional<Version> parse(String input)
@@ -151,209 +120,53 @@ public final class Version implements Comparable<Version>
         catch (IllegalArgumentException ignored) { return Optional.empty(); }
     }
     
-    public static Builder builder() { return new Builder(); }
-    
     public static Version zero() { return ZERO; }
     
-    private final int major;
-    private final int minor;
-    private final int patch;
-    private final @NullOr String prerelease;
-    private final @NullOr String build;
+    public static Builder builder() { return ZERO.toBuilder(); }
     
-    private Version(int major, int minor, int patch, @NullOr String prerelease, @NullOr String build)
+    private final VersionCore core;
+    private final VersionMetadata prerelease;
+    private final VersionMetadata build;
+    
+    private Version(VersionCore core, VersionMetadata prerelease, VersionMetadata build)
     {
-        this.major = major;
-        this.minor = minor;
-        this.patch = patch;
+        this.core = core;
         this.prerelease = prerelease;
         this.build = build;
     }
     
-    public int major() { return major; }
+    public VersionCore core() { return core; }
     
-    public int minor() { return minor; }
+    public int major() { return core.major(); }
     
-    public int patch() { return patch; }
+    public int minor() { return core.minor(); }
     
-    public Optional<String> prerelease() { return Optional.ofNullable(prerelease); }
+    public int patch() { return core.patch(); }
     
-    public Optional<String> build() { return Optional.ofNullable(build); }
+    public VersionMetadata prerelease() { return prerelease; }
     
-    public boolean greaterThan(Version o)
-    {
-        return compareTo(o) > 0;
-    }
+    public VersionMetadata build() { return build; }
     
-    public boolean greaterThanOrEqualTo(Version o)
-    {
-        return compareTo(o) >= 0;
-    }
-    
-    // Like equals, but disregards build metadata
-    public boolean equalTo(Version version)
-    {
-        return compareTo(version) == 0;
-    }
-    
-    public boolean lessThan(Version o)
-    {
-        return compareTo(o) < 0;
-    }
-    
-    public boolean lessThanOrEqualTo(Version o)
-    {
-        return compareTo(o) <= 0;
-    }
-    
-    // >= 1.2.3
-    public boolean atLeast(int major, int minor, int patch)
-    {
-        return compareTo(major, minor, patch) >= 0;
-    }
-    
-    // >= 1.2.*
-    public boolean atLeast(int major, int minor)
-    {
-        return atLeast(major, minor, 0);
-    }
-    
-    // >= 1.*.*
-    public boolean atLeast(int major)
-    {
-        return atLeast(major, 0, 0);
-    }
-    
-    // <= 1.2.3
-    public boolean atMost(int major, int minor, int patch)
-    {
-        return compareTo(major, minor, patch) <= 0;
-    }
-    
-    // <= 1.2.*
-    public boolean atMost(int major, int minor)
-    {
-        return atMost(major, minor, Integer.MAX_VALUE);
-    }
-    
-    // <= 1.*.*
-    public boolean atMost(int major)
-    {
-        return atMost(major, Integer.MAX_VALUE, Integer.MAX_VALUE);
-    }
-    
-    // == 1.2.3
-    public boolean isAny(int major, int minor, int patch)
-    {
-        return atLeast(major, minor, patch) && atMost(major, minor, patch);
-    }
-    
-    // == 1.2.*
-    public boolean isAny(int major, int minor)
-    {
-        return atLeast(major, minor) && atMost(major, minor);
-    }
-    
-    // == 1.*.*
-    public boolean isAny(int major)
-    {
-        return atLeast(major) && atMost(major);
-    }
-    
-    @SuppressWarnings("RedundantIfStatement") // included for clarity
-    private int compareTo(int major, int minor, int patch)
-    {
-        int diffMajor = this.major - major;
-        if (diffMajor != 0) { return diffMajor; }
-        
-        int diffMinor = this.minor - minor;
-        if (diffMinor != 0) { return diffMinor; }
-        
-        int diffPatch = this.patch - patch;
-        if (diffPatch != 0) { return diffPatch; }
-        
-        return 0;
-    }
+    public boolean hasMetadata() { return prerelease.isPresent() || build.isPresent(); }
     
     @Override
     public int compareTo(Version o)
     {
-        int diff = compareTo(o.major, o.minor, o.patch);
-        if (diff != 0) { return diff; }
-        
-        if (prerelease == null)
-        {
-            if (o.prerelease != null) { return 1; }
-        }
-        else
-        {
-            if (o.prerelease == null) { return -1; }
-            return comparePrereleaseStrings(prerelease, o.prerelease);
-        }
-        
-        return 0;
-    }
-    
-    // 11.4:    Precedence for two pre-release versions with the same major, minor, and patch version
-    //          MUST be determined by comparing each dot separated identifier from left to right until
-    //          a difference is found as follows:
-    @VisibleForTesting
-    static int comparePrereleaseStrings(String leftPrerelease, String rightPrerelease)
-    {
-        if (leftPrerelease.equals(rightPrerelease)) { return 0; }
-        
-        String[] leftIdentifiers = DOT_SEPARATOR.split(leftPrerelease);
-        String[] rightIdentifiers = DOT_SEPARATOR.split(rightPrerelease);
-        
-        for (int i = 0; i < leftIdentifiers.length; i++)
-        {
-            String left = leftIdentifiers[i];
-            
-            // 11.4.4:  A larger set of pre-release fields has a higher precedence than a smaller set,
-            //          if all of the preceding identifiers are equal.
-            // (Right has fewer identifiers, so left takes precedence)
-            if (rightIdentifiers.length <= i) { return 1; }
-            
-            String right = rightIdentifiers[i];
-            
-            boolean leftIsNumeric = DIGITS.matcher(left).matches();
-            boolean rightIsNumeric = DIGITS.matcher(right).matches();
-            
-            // 11.4.1: Identifiers consisting of only digits are compared numerically.
-            if (leftIsNumeric && rightIsNumeric)
-            {
-                int diff = Integer.parseInt(left) - Integer.parseInt(right);
-                
-                if (diff == 0) { continue; }
-                else { return diff; }
-            }
-            // 11.4.3: Numeric identifiers always have lower precedence than non-numeric identifiers.
-            else if (leftIsNumeric) { return -1; }
-            else if (rightIsNumeric) { return 1; }
-            
-            // 11.4.2: Identifiers with letters or hyphens are compared lexically in ASCII sort order.
-            int diff = left.compareTo(right);
-            if (diff != 0) { return diff; }
-        }
-        
-        // Right has more segments, which takes precedence over left
-        if (rightIdentifiers.length > leftIdentifiers.length) { return -1; }
-        
-        // Equal
-        return 0;
+        int diff = core.compareTo(o.core);
+        return (diff != 0) ? diff : prerelease.compareTo(o.prerelease);
     }
     
     public Builder toBuilder()
     {
-        return new Builder(this);
+        return new Builder();
     }
     
     @Override
     public String toString()
     {
-        String ver = major + "." + minor + "." + patch;
-        if (prerelease != null) { ver += "-" + prerelease; }
-        if (build != null) { ver += "+" + build; }
+        String ver = core.toString();
+        if (!prerelease.isEmpty()) { ver += "-" + prerelease; }
+        if (!build.isEmpty()) { ver += "+" + build; }
         return ver;
     }
     
@@ -363,9 +176,7 @@ public final class Version implements Comparable<Version>
         if (this == o) { return true; }
         if (o == null || getClass() != o.getClass()) { return false; }
         Version version = (Version) o;
-        return major == version.major
-            && minor == version.minor
-            && patch == version.patch
+        return Objects.equals(core, version.core)
             && Objects.equals(prerelease, version.prerelease)
             && Objects.equals(build, version.build);
     }
@@ -373,61 +184,62 @@ public final class Version implements Comparable<Version>
     @Override
     public int hashCode()
     {
-        return Objects.hash(major, minor, patch, prerelease, build);
+        return Objects.hash(core, prerelease, build);
     }
     
-    public static final class Builder
+    public final class Builder
     {
-        private int major;
-        private int minor;
-        private int patch;
-        private @NullOr String prerelease;
-        private @NullOr String build;
+        private VersionCore.Builder core;
+        private String prerelease;
+        private String build;
         
-        private Builder() {}
-        
-        private Builder(Version existing)
+        private Builder()
         {
-            this.major = existing.major;
-            this.minor = existing.minor;
-            this.patch = existing.patch;
-            this.prerelease = existing.prerelease;
-            this.build = existing.build;
+            this.core = Version.this.core.toBuilder();
+            this.prerelease = Version.this.prerelease.toString();
+            this.build = Version.this.build.toString();
         }
         
         public Builder major(int major)
         {
-            this.major = onlyIfPositive(major, "major");
+            core.major(major);
             return this;
         }
         
         public Builder minor(int minor)
         {
-            this.minor = onlyIfPositive(minor, "minor");
+            core.major(minor);
             return this;
         }
         
         public Builder patch(int patch)
         {
-            this.patch = onlyIfPositive(patch, "patch");
+            core.patch(patch);
+            return this;
+        }
+        
+        public Builder core(VersionCore core)
+        {
+            this.core = core.toBuilder();
             return this;
         }
         
         public Builder prerelease(@NullOr String prerelease)
         {
-            this.prerelease = onlyIfMatchesPattern(prerelease, VALID_PRE_RELEASE_PATTERN, "prerelease");
+            this.prerelease = Versions.emptyIfNull(Versions.onlyIfMatchesPattern(prerelease, Versions.VALID_PRE_RELEASE_PATTERN, "prerelease"));
             return this;
         }
         
         public Builder build(@NullOr String build)
         {
-            this.build = onlyIfMatchesPattern(build, VALID_BUILD_METADATA_PATTERN, "build");
+            this.build = Versions.emptyIfNull(Versions.onlyIfMatchesPattern(build, Versions.VALID_BUILD_METADATA_PATTERN, "build"));
             return this;
         }
         
         public Version build()
         {
-            return Version.of(major, minor, patch, prerelease, build);
+            return Version.of(core.build(), meta(prerelease), meta(build));
         }
     }
+    
 }
